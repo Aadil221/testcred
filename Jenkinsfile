@@ -3,6 +3,7 @@ pipeline {
     
     environment {
         SECRET_VAR = credentials('secret_text')
+        DOCKER_PORT = '8081'  // Changed port
     }
     
     stages {
@@ -26,12 +27,33 @@ pipeline {
         
         stage('Run Container') {
             steps {
-                sh '''
-                    docker stop custom-nginx || true
-                    docker rm custom-nginx || true
-                    docker run -d -p 8080:80 --name custom-nginx custom-nginx
-                '''
+                script {
+                    try {
+                        sh '''
+                            docker stop custom-nginx || true
+                            docker rm custom-nginx || true
+                            docker run -d -p ${DOCKER_PORT}:80 --name custom-nginx custom-nginx
+                        '''
+                    } catch (Exception e) {
+                        sh '''
+                            echo "Attempting cleanup..."
+                            docker stop custom-nginx || true
+                            docker rm custom-nginx || true
+                            docker run -d -p ${DOCKER_PORT}:80 --name custom-nginx custom-nginx
+                        '''
+                    }
+                }
             }
+        }
+    }
+    
+    post {
+        failure {
+            sh '''
+                echo "Pipeline failed! Cleaning up..."
+                docker stop custom-nginx || true
+                docker rm custom-nginx || true
+            '''
         }
     }
 }
